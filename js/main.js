@@ -35,21 +35,21 @@ var app = {
             },
             complete: function(results) {
                 var data     = results.data;
-                var dataset  = {};
+                var database  = {};
                 var firstLine = data.shift();
                 /* convert data format */
                 firstLine.shift();
-                dataset.labels = firstLine;
-                dataset.series = {};
+                database.labels = firstLine;
+                database.series = {};
                 data.forEach(function(line) {
                     var key = line.shift();
                     var value = line.map(function(el) {
                         return parseFloat(el);
                     });
-                    dataset.series[key] = value;
+                    database.series[key] = value;
                 });
                 /* add to global data collections */
-                app.dataset[name] = dataset;
+                app.database[name] = database;
                 /* call initial process */
                 callback();
             }
@@ -58,7 +58,7 @@ var app = {
 };
 
 /* data model */
-app.dataset = {};
+app.database = {};
 
 app.dataFilter = {
     do: function(dataset, series, filter, args) {
@@ -124,8 +124,8 @@ app.store = {
  * @series string
  * @selected array of index
  */
-app.Target = function(dataset, series, selected) {
-    this.dataset = dataset;
+app.Target = function(table, series, selected) {
+    this.table = table;
     this.series = series;
     this.selected = selected;
 }
@@ -134,7 +134,7 @@ app.actionType = {
     /* highlight selected data */
     highlight: 'highlight',
     /* switch figure content */
-    update: 'switch',
+    update: 'update',
     /* show enlarged figure */
     enlarge: 'enlarge',
     /* reset to default status */
@@ -197,10 +197,10 @@ app.dispatcher = {
  * @actionType jQuery object
  * @target raw string need to be parsed
  */
-app.Action = function(event, actionType, target) {
+app.Action = function(event, options) {
     this.event      = event;
-    this.actionType = actionType;
-    this.target     = this._parseTarget(target);
+    this.actionType = options.onHover;
+    this.target     = this._parseTarget(options);
 }
 
 app.Action.prototype._parseTarget = function(str) {
@@ -237,12 +237,12 @@ app.Action.prototype._parseTarget = function(str) {
  * @series row name in a table
  * @charttype bar, line, pie
  */
-app.Sparkline= function(mountNode, set, series, charttype) {
+app.Sparkline= function(mountNode, options) {
     /* static props */
     this.mountNode = mountNode;
-    this.dataset = set;
-    this.series = series;
-    this.charttype = charttype;
+    this.table = options.table || "";
+    this.series = options.series || "";
+    this.charttype = options.charttype || "";
     this.chart = this._getChart();
     /* mutable status */
     this.props = {
@@ -272,14 +272,10 @@ app.Sparkline.prototype.update = function(action, selected) {
 
 app.Sparkline.prototype._getChart = function() {
     var self = this;
-    var dataset = app.dataset[self.dataset];
-    var table = [];
-    $.each(dataset.series, function(key, value) {
-        table.push(key === self.series ? value : []);
-    })
+    var table = app.database[self.table];
     var data = {
-        labels: dataset.labels,
-        series: table
+        labels: table.labels,
+        series: [table.[self.series]]
     };
     var options = {
         axisX: {
@@ -315,29 +311,26 @@ app.Sparkline.prototype._getChart = function() {
     }
 };
 
-app.Figure = function(mountNode, table, rows, charttype) {
+app.Figure = function(mountNode, options) {
     this.mountNode = mountNode;
-    this.dataset = table;
-    this.charttype = charttype;
-    this.chart = this._getChart(rows);
+    this.table = options.table || "";
+    this.series = options.series || "";
+    this.charttype = options.charttype || "";
+    this.chart = this._getChart();
     /* mutable status */
     this.props = {
         visible: true
     }
 }
 
-app.Figure.prototype._getChart = function(rows) {
-    var set = app.dataset[this.dataset];
-    var series = [];
-    $.each(set.series, function(key, value) {
-        series.push(rows.includes(key) ? value : []);
-    });
+app.Figure.prototype._getChart = function() {
+    var set = app.database[this.table];
     var data = {
         labels: set.labels,
-        series: series
+        series: [table.[self.series]]
     };
     if (this.charttype === 'bar') {
-        options = {
+        var options = {
             seriesBarDistance: 0
         }
         this.chart = new Chartist.Bar(this.mountNode, data, options);
@@ -357,39 +350,38 @@ app.Figure.prototype._getChart = function(rows) {
 app.loadCSV('papers', 'csv/data.csv', function() {
     /* initial process */
     /* draw sparklines and save view model */
-    $('tc-sparkline').each(function(i) {
+    $('[app-sparkline]').each(function(i) {
         var el      = $(this);
-        var set     = el.data('set');
-        var series  = el.data('series');
-        var charttype = el.data('charttype');
-        /* pass DOM element directly as mount point*/
-        var s       = new app.Sparkline(el[0], set, series, charttype);
-        /* change bar colour */
-        s.chart.on('draw', function(context) {
-            context.element.addClass('dark-grey');
-        });
-        app.store.sparklines.push(s);
+        var attr    = el.attr('app-sparkline');
+        var options = app.parseAttr(attr);
+        if (options) {
+            /* pass DOM element directly as mount point*/
+            var s   = new app.Sparkline(el[0], options);
+            app.store.sparklines.push(s);
+        }
+        
     });
     /* draw figures and save view model */
-    $('tc-figure').each(function(i) {
+    $('[app-figure]').each(function(i) {
         var el      = $(this);
-        var table     = el.data('set');
-        var rows    = el.data('show').split(',').map(function(item) {
-            return item.trim();
-        });
-        var charttype = el.data('charttype');
-        var s         = new app.Figure(el[0], table, rows, charttype);
-        app.store.figures.push(s);
+        var attr    = el.attr('app-sparkline');
+        var options = app.parseAttr(attr);
+        if (options) {
+            var f   = new app.Figure(el[0], options);
+            app.store.figures.push(f);
+        }       
     });
     /* create semantic connections */
-    $('tc-text').each(function(i) {
-        var $node = $(this);
-        var target = $node.data('target');
-        var hoverAction = $node.data('onHover') || app.defaultAction.text.onHover;
-        var clickAction = $node.data('onClick') || app.defaultAction.text.onClick;
-        var handler = app.dispatcher.getEventHandler(
-            new app.Action('mouseHover', hoverAction, target
-        )); 
-        $node.hover(handler.mouseenter, handler.mouseleave);
+    $('[app-text]').each(function(i) {
+        var $el   = $(this);
+        var attr    = el.attr('app-sparkline');
+        var options = app.parseAttr(attr);
+        if (options) {
+            if(!options.onHover)
+                options.actionType = app.defaultAction.text.onHover;
+            var handler = app.dispatcher.getEventHandler(
+                new app.Action('mouseHover', options)); 
+            $el.hover(handler.mouseenter, handler.mouseleave);
+        }
     });
 });
