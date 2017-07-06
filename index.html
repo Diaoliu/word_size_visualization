@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">   
+    <title>Sparkline - demo</title>
+    <meta name="description" content="demos for word-scale visualization">
+    <meta name="keywords" content="Sparkline Word-scale Visualization JavaScript D3.js">
+    <meta name="author" content="Diao Liu">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Fancy Web Font -->
+    <link href="https://fonts.googleapis.com/css?family=Roboto+Slab:300,400,700" rel="stylesheet">
+    <!-- CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/uikit/3.0.0-beta.25/css/uikit.min.css"/>   
+    <link rel="stylesheet" href="css/chartist.css"/>
+    <link rel="stylesheet" href="css/style.css"/>
+  </head>
+  <body>
+    <div id="root" class="uk-container uk-container-small">
+      <div class="uk-padding">
+        <h2 class="uk-text-center">A Brief History of Dynamic Graph Visualization</h2>
+        <p>
+          The visualization of dynamic graphs is a growing research area. Starting with <tc-text data-target='papers|papers pro year|max'>first approaches in the 90s</tc-text>, the field has been steadily growing to around 20 new publications per year recently<tc-sparkline data-set="papers" data-series="papers pro year" data-charttype="bar"></tc-sparkline>. While early publications mainly introduced new visualization techniques, currently a well-balanced mix of technique<tc-sparkline data-set="papers" data-series="technique papers" data-charttype="bar"></tc-sparkline>, <tc-text data-target='papers|application papers'>application</tc-text><tc-sparkline data-set="papers" data-series="application papers" data-charttype="bar"></tc-sparkline>, and <tc-text data-target='papers|evaluation papers'>evaluation papers</tc-text><tc-sparkline data-set="papers" data-series="evaluation papers" data-charttype="bar"></tc-sparkline> is published.
+        </p>
+        <tc-figure data-set="papers" data-show="hybrid techniques" data-charttype="bar"></tc-figure>
+        <div figure="table: foo, row: []"></div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/uikit/3.0.0-beta.25/js/uikit.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/4.3.3/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartist/0.11.0/chartist.min.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>

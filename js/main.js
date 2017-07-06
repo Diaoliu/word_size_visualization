@@ -10,7 +10,24 @@ var app = {
           timeout: 5000
         });
     },
-    parsecsv: function (name, file, callback) {
+    parseAttr: function(str) {
+        var attr = {};
+        str = str.charAt(str.length - 1) === ';' ? str : str + ';';
+        var re = /^([^:]+:[^;]+;)+$/;
+        if (re.test(str)) {
+            var arr = str.trim().split(/\s*;\s*/);
+            arr.pop();
+            console.log(arr);
+            arr.forEach(function(el) {
+                var pair = el.split(/\s*:\s*/);
+                attr[pair[0]] = pair[1];
+            });
+        } else {
+            app.notification('Wrong options!', 'danger');
+        }
+        return attr;   
+    },
+    loadCSV: function (name, file, callback) {
         Papa.parse(file, {
             download: true,
             error: function(err) {
@@ -337,7 +354,7 @@ app.Figure.prototype._getChart = function(rows) {
     }
 };
 
-app.parsecsv('papers', 'csv/data.csv', function() {
+app.loadCSV('papers', 'csv/data.csv', function() {
     /* initial process */
     /* draw sparklines and save view model */
     $('tc-sparkline').each(function(i) {
