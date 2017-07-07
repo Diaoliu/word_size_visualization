@@ -17,7 +17,6 @@ var app = {
         if (re.test(str)) {
             var arr = str.trim().split(/\s*;\s*/);
             arr.pop();
-            console.log(arr);
             arr.forEach(function(el) {
                 var pair = el.split(/\s*:\s*/);
                 attr[pair[0]] = pair[1];
@@ -59,6 +58,8 @@ var app = {
 
 /* data model */
 app.database = {};
+/* singleton object */
+app.store = [];
 
 app.dataFilter = {
     do: function(dataset, series, filter, args) {
@@ -113,22 +114,6 @@ app.dataFilter = {
         }
     }
 };
-/* singleton object */
-app.store = {
-    figures: [],
-    sparklines: []
-};
-/**
- * @brief Target class
- * @dataset string
- * @series string
- * @selected array of index
- */
-app.Target = function(table, series, selected) {
-    this.table = table;
-    this.series = series;
-    this.selected = selected;
-}
 
 app.actionType = {
     /* highlight selected data */
@@ -159,77 +144,47 @@ app.defaultAction = {
  * @brief Action dispatcher
  */
 app.dispatcher = {
-    getEventHandler: function(action) {
-        if (action.event === 'mouseHover')
-            return this._onMouseHover(action);
-        else if (action.event === 'mouseClick')
-            return this._onMouseClick(action);
+    eventHandler: function($el, view) {
+        if (view.filter) {
+            this._parseFilter(view);
+        }
+        $el.hover(this._mousehover(view));
+        $el.click(this._mouseclick(view));
     },
-    _onMouseHover: function(action) {
-        var target = action.target;
+    _mousehover: function(view) {
         var charts = [];
         return {
             mouseenter: function () {
-                app.store.sparklines.forEach(function(sparkline) {
-                    if (sparkline.dataset === target.dataset 
-                        && sparkline.series === target.series) {
-                        charts.push(sparkline);
-                        sparkline.update(action.actionType, target.selected);
+                app.store.forEach(function(chart) {
+                    if (chart.table === view.table 
+                        && chart.series === view.series) {
+                        charts.push(chart);
+                        chart.update(view.onHover, view);
                     }
                 });
             },
             mouseleave: function () {
-                app.store.sparklines.forEach(function(sparkline) {
-                    charts.forEach(function(chart) {
-                        chart.update(app.actionType.reset);
-                    });
+                charts.forEach(function(chart) {
+                    chart.update(app.actionType.reset);
                 });
             } 
         }
     },
-    _onMouseClick: function(action) {
+    _mouseclick: function(view) {
         // body...
     }
 };
-/**
- * @brief Action class
- * @event jQuery object
- * @actionType jQuery object
- * @target raw string need to be parsed
- */
-app.Action = function(event, options) {
-    this.event      = event;
-    this.actionType = options.onHover;
-    this.target     = this._parseTarget(options);
+app.View = function(view) {
+    this.class = view.class;
+    this.charttype = view.charttype;
+    this.onHover = view.onHover || app.defaultAction[this.class].onHover;
+    this.onClick = view.onClick || app.defaultAction[this.class].onClick;
+    this.table = view.table;
+    this.series = view.series;
+    this.filter = view.filter;
+    this.args = [];
+    this.selected = [];
 }
-
-app.Action.prototype._parseTarget = function(str) {
-    var tokens;
-    var dataset;
-    var series;
-    var filterName;
-    var args;
-    try {
-        tokens = str.split('|').map(function(token) {
-            return token.trim();
-        });
-        dataset = tokens[0];
-        series = tokens[1];
-        if (tokens.length === 3) {
-            var fn = tokens[2].split(/\(|\)/);
-            filterName = fn[0];
-            if (fn.length == 3) {
-                args = fn[1].split(',').map(function(arg) {
-                    return parseFloat(arg.trim());
-                });
-            } 
-        }   
-        var selected = app.dataFilter.do(dataset, series, filterName, args);
-        return new app.Target(dataset, series, selected);
-    } catch(err) {
-        app.notification(err + ' Can not parse target!', 'danger');
-    }
-};
 /**
  * @brief Sparkline class: word-scale charts
  * @mountNode DOM object
@@ -237,12 +192,9 @@ app.Action.prototype._parseTarget = function(str) {
  * @series row name in a table
  * @charttype bar, line, pie
  */
-app.Sparkline= function(mountNode, options) {
-    /* static props */
+app.Chart = function (mountNode, view) {
     this.mountNode = mountNode;
-    this.table = options.table || "";
-    this.series = options.series || "";
-    this.charttype = options.charttype || "";
+    this.view = view;
     this.chart = this._getChart();
     /* mutable status */
     this.props = {
@@ -250,32 +202,20 @@ app.Sparkline= function(mountNode, options) {
     }
 }
 
-app.Sparkline.prototype.update = function(action, selected) {
-    var self = this;
-    if (action === app.actionType.highlight) {
-        /* convert DOM object to jQuery Object */
-        var $bars = $(this.chart.container).find('line.ct-bar');
-        $bars.each(function(index) {
-            if (selected.includes(index)) {
-                self.props.highlighted.push($(this));
-                $(this).removeClass('dark-grey');
-            }
-        });
-    } else if (action === app.actionType.reset) {
-        self.props.highlighted.forEach(function(el) {
-            el.addClass('dark-grey');
-        });
-        self.props.highlighted = [];
-    }
-    
+app.Chart.prototype._getChart = function() {
+    if (this.view.class === 'sparkline')
+        return this._getSparkline();
+    if (this.view.class === 'figure')
+        return this._getFigure();
 }
 
-app.Sparkline.prototype._getChart = function() {
+app.Chart.prototype._getSparkline = function() {
     var self = this;
-    var table = app.database[self.table];
+    var view = self.view;
+    var table = app.database[view.table];
     var data = {
         labels: table.labels,
-        series: [table.[self.series]]
+        series: [table.series[view.series]]
     };
     var options = {
         axisX: {
@@ -299,9 +239,9 @@ app.Sparkline.prototype._getChart = function() {
             left: 0
         }
     };
-    if (this.charttype === 'bar') {
+    if (view.charttype === 'bar') {
         return new Chartist.Bar(self.mountNode, data, options);
-    } else if (this.charttype === 'line') {
+    } else if (view.charttype === 'line') {
         options.showPoint = false;
         options.lineSmooth = false;
         options.chartPadding.top = 5;
@@ -309,32 +249,22 @@ app.Sparkline.prototype._getChart = function() {
         options.fullWidth = true;
         return new Chartist.Line(self.mountNode, data, options);
     }
-};
-
-app.Figure = function(mountNode, options) {
-    this.mountNode = mountNode;
-    this.table = options.table || "";
-    this.series = options.series || "";
-    this.charttype = options.charttype || "";
-    this.chart = this._getChart();
-    /* mutable status */
-    this.props = {
-        visible: true
-    }
 }
 
-app.Figure.prototype._getChart = function() {
-    var set = app.database[this.table];
+app.Chart.prototype._getFigure = function() {
+    var self = this;
+    var view = self.view;
+    var table = app.database[view.table];
     var data = {
-        labels: set.labels,
-        series: [table.[self.series]]
+        labels: table.labels,
+        series: [table.series[view.series]]
     };
-    if (this.charttype === 'bar') {
+    if (view.charttype === 'bar') {
         var options = {
             seriesBarDistance: 0
         }
-        this.chart = new Chartist.Bar(this.mountNode, data, options);
-    } else if (this.charttype === 'line') {
+        self.chart = new Chartist.Bar(self.mountNode, data, options);
+    } else if (view.charttype === 'line') {
         var options = {
             lineSmooth: false,
             fullWidth: true,
@@ -343,45 +273,45 @@ app.Figure.prototype._getChart = function() {
                 right: 50
             }
         }
-        this.chart = new Chartist.Line(this.mountNode, data, options);
+        self.chart = new Chartist.Line(self.mountNode, data, options);
     }
-};
+}
+
+app.Chart.prototype.update = function(action, view) {
+    var self = this;
+    if (action === app.actionType.highlight) {
+        /* convert DOM object to jQuery Object */
+        var $bars = $(self.chart.container).find('line.ct-bar');
+        $bars.each(function(index) {
+            if (view.selected.includes(index)) {
+                self.props.highlighted.push($(this));
+                $(this).removeClass('dark-grey');
+            }
+        });
+    } else if (action === app.actionType.reset) {
+        self.props.highlighted.forEach(function(el) {
+            el.addClass('dark-grey');
+        });
+        self.props.highlighted = [];
+    }
+}
 
 app.loadCSV('papers', 'csv/data.csv', function() {
     /* initial process */
     /* draw sparklines and save view model */
-    $('[app-sparkline]').each(function(i) {
-        var el      = $(this);
-        var attr    = el.attr('app-sparkline');
-        var options = app.parseAttr(attr);
-        if (options) {
-            /* pass DOM element directly as mount point*/
-            var s   = new app.Sparkline(el[0], options);
-            app.store.sparklines.push(s);
+    $('.app-text, .app-sparkline, .app-figure').each(function(i) {
+        var el     = $(this)[0];
+        var option = el.dataset.option;
+        var view   = app.parseAttr(option);
+        view.class = el.className.match(/app-\w*/)[0].replace("app-", "");
+        if (view) {
+            if (view.class === 'sparkline' || view.class === 'figure') {
+                /* pass DOM element directly as mount point*/
+                var s = new app.Chart(el, new app.View(view));
+                app.store.push(s);
+            }
+            // app.dispatcher.eventHandler($(this), view);
         }
         
-    });
-    /* draw figures and save view model */
-    $('[app-figure]').each(function(i) {
-        var el      = $(this);
-        var attr    = el.attr('app-sparkline');
-        var options = app.parseAttr(attr);
-        if (options) {
-            var f   = new app.Figure(el[0], options);
-            app.store.figures.push(f);
-        }       
-    });
-    /* create semantic connections */
-    $('[app-text]').each(function(i) {
-        var $el   = $(this);
-        var attr    = el.attr('app-sparkline');
-        var options = app.parseAttr(attr);
-        if (options) {
-            if(!options.onHover)
-                options.actionType = app.defaultAction.text.onHover;
-            var handler = app.dispatcher.getEventHandler(
-                new app.Action('mouseHover', options)); 
-            $el.hover(handler.mouseenter, handler.mouseleave);
-        }
     });
 });
