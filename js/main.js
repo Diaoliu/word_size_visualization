@@ -62,30 +62,18 @@ app.database = {};
 app.store = [];
 
 app.dataFilter = {
-    do: function(dataset, series, filter, args) {
+    do: function(view) {
         var selected = [];
-        var arr = app.dataset[dataset].series[series];
+        var arr = app.database[view.table].series[view.series];
         var selector = function (fn) {
             $.each(arr, function(key, value) {
-                if (fn(arr, key, value, args))
+                if (fn(key, value, arr, view.filterArgs))
                     selected.push(key);
             });
         };
-        if (filter === 'index') {
-            selected = args;
-        } else if (filter === 'slice')  {
-            for (var i = args[0]; i <= args[1]; i++)
-                selected.push(i);
-        } else if (filter === 'first')  {
-            selected = [0];
-        } else if (filter === 'last')  {
-            selected = [arr.length - 1];
-        } else if(filter) {
-            selector(this._filter[filter]);
-        } else {
-            /* filter is undefined, select all elements */
-            for (var i = 0; i <= arr.length; i++)
-                selected.push(i); 
+        var filter = this._filter[view.filter];
+        if (filter) {
+            selector(filter);
         }
         return selected;
     },
@@ -95,21 +83,33 @@ app.dataFilter = {
         }    
     },
     _filter: {
-        max: function(arr, key, value) {
+        index: function(key, value, arr, args) {
+            return args.includes(key);
+        },
+        slice:function(key, value, arr, args) {
+            return key >= args[0] && key <= args[1];
+        },
+        first:function(key, value, arr, args) {
+            return key == 0;
+        },
+        last:function(key, value, arr, args) {
+            return key == arr.length - 1;
+        },
+        max: function(key, value, arr, args) {
             var max = Math.max.apply(Math,arr);
             return value == max;
         },
-        min: function(arr, key, value) {
+        min: function(key, value, arr, args) {
             var min = Math.min.apply(Math,arr);
             return value == min;
         },
-        smaller: function(arr, key, value, args) {
+        smaller: function(key, value, arr, args) {
             return value < args[0];
         },
-        larger: function(arr, key, value, args) {
+        larger: function(key, value, arr, args) {
             return value > args[0];
         },
-        equal: function(arr, key, value, args) {
+        equal: function(key, value, arr, args) {
             return value === args[0];
         }
     }
@@ -148,7 +148,8 @@ app.dispatcher = {
         if (view.filter) {
             this._parseFilter(view);
         }
-        $el.hover(this._mousehover(view));
+        var hoverHandler = this._mousehover(view);
+        $el.hover(hoverHandler.mouseenter, hoverHandler.mouseleave);
         $el.click(this._mouseclick(view));
     },
     _mousehover: function(view) {
@@ -156,8 +157,8 @@ app.dispatcher = {
         return {
             mouseenter: function () {
                 app.store.forEach(function(chart) {
-                    if (chart.table === view.table 
-                        && chart.series === view.series) {
+                    if (chart.view.table === view.table 
+                        && chart.view.series === view.series) {
                         charts.push(chart);
                         chart.update(view.onHover, view);
                     }
@@ -171,9 +172,34 @@ app.dispatcher = {
         }
     },
     _mouseclick: function(view) {
-        // body...
+        return function () {
+            app.store.forEach(function(chart) {
+                if (chart.view.table === view.table
+                    && chart.view.class === "figure") {
+                    chart.update(view.onClick, view);
+                }
+            });
+        };
+    },
+    _parseFilter: function(view) {
+        var filter = view.filter;
+        var token = [];
+        /* remove all white spaces */
+        filter = filter.replace(/\s+/g, "");
+        /* valid filter syntax */
+        if(/^[A-Za-z_]\w*\(\d*(,\d+)*\)/.test(filter)) {
+            token = filter.split(/\(|\)/);
+            token = token.filter(function(el) {
+                return el != "";
+            });
+            view.filter = token.shift();
+            if (token.length != 0) {
+                view.filterArgs = token[0].split(",");
+            }
+        }
     }
 };
+
 app.View = function(view) {
     this.class = view.class;
     this.charttype = view.charttype;
@@ -182,15 +208,13 @@ app.View = function(view) {
     this.table = view.table;
     this.series = view.series;
     this.filter = view.filter;
-    this.args = [];
+    this.filterArgs = [];
     this.selected = [];
 }
 /**
- * @brief Sparkline class: word-scale charts
+ * @brief Char class: sparkline and figure
  * @mountNode DOM object
- * @set table name
- * @series row name in a table
- * @charttype bar, line, pie
+ * @view app.View 
  */
 app.Chart = function (mountNode, view) {
     this.mountNode = mountNode;
@@ -263,7 +287,7 @@ app.Chart.prototype._getFigure = function() {
         var options = {
             seriesBarDistance: 0
         }
-        self.chart = new Chartist.Bar(self.mountNode, data, options);
+        return new Chartist.Bar(self.mountNode, data, options);
     } else if (view.charttype === 'line') {
         var options = {
             lineSmooth: false,
@@ -273,24 +297,33 @@ app.Chart.prototype._getFigure = function() {
                 right: 50
             }
         }
-        self.chart = new Chartist.Line(self.mountNode, data, options);
+        return new Chartist.Line(self.mountNode, data, options);
     }
 }
 
 app.Chart.prototype.update = function(action, view) {
     var self = this;
     if (action === app.actionType.highlight) {
+        view.selected = app.dataFilter.do(view);
         /* convert DOM object to jQuery Object */
         var $bars = $(self.chart.container).find('line.ct-bar');
         $bars.each(function(index) {
             if (view.selected.includes(index)) {
                 self.props.highlighted.push($(this));
-                $(this).removeClass('dark-grey');
+                $(this).addClass('highlighted');
             }
         });
+    } else if (action === app.actionType.update) {
+        self.view.series = view.series;
+        var table = app.database[view.table];
+        var data = {
+            labels: table.labels,
+            series: [table.series[view.series]]
+        };
+        self.chart.update(data);
     } else if (action === app.actionType.reset) {
         self.props.highlighted.forEach(function(el) {
-            el.addClass('dark-grey');
+            el.removeClass('highlighted');
         });
         self.props.highlighted = [];
     }
@@ -309,8 +342,9 @@ app.loadCSV('papers', 'csv/data.csv', function() {
                 /* pass DOM element directly as mount point*/
                 var s = new app.Chart(el, new app.View(view));
                 app.store.push(s);
-            }
-            // app.dispatcher.eventHandler($(this), view);
+            } else {
+                app.dispatcher.eventHandler($(this), new app.View(view));
+            }         
         }
         
     });
