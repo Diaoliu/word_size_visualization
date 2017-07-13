@@ -19,16 +19,15 @@
       <div class="uk-padding">
         <h2 class="uk-text-center">A Brief History of Dynamic Graph Visualization</h2>
         <p>
-          The visualization of dynamic graphs is a growing research area. Starting with <app-text data-option="table: papers;series: papers pro year; filter: slice(0,7)">first approaches in the 90s</app-text>, the field has been steadily growing to around 20 new publications per year recently<app-sparkline data-option="table: papers;series: papers pro year; charttype: bar"></app-sparkline>. While early publications mainly introduced new visualization techniques, currently a well-balanced mix of <app-text class="app-text" data-option="table: papers;series: technique papers;charttype: bar; onClick: insert">technique</app-text>, <app-text class="app-text" data-option="table: papers;series: application papers">application</app-text>, and <app-text class="app-text" data-option="table: papers;series: evaluation papers;charttype: bar; onClick: popup">evaluation papers</app-text> is published.
+          The visualization of dynamic graphs is a growing research area. Starting with <span id="first-approaches">first approaches in the 90s</span>, the field has been steadily growing to around 20 new publications per year recently<span id="papers-pro-year"></span>. While early publications mainly introduced new visualization techniques, currently a well-balanced mix of <span id="technique">technique</span>, <span id="application">application</span>, and <span id="evaluation">evaluation papers</span> is published.
         </p>
-        <app-figure data-option="charttype: bar;table: papers;series: papers pro year">
-        </app-figure>
+        <div id="papers"></div>
       </div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/uikit/3.0.0-beta.25/js/uikit.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/4.3.3/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartist/0.11.0/chartist.min.js"></script>
-    <script src="js/main.js"></script>
+    <script src="js/app.js"></script>
   </body>
 </html>
