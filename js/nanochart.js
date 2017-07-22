@@ -1,85 +1,60 @@
 "use strict";
 
-function Nanochart() {
-    this.database = {};
-    this.charts = [];
+function Nanochart(database) {
+    this.database = database;
+    this.charts = {};
 };
 
-Nanochart.prototype.addData = function(file, callback) {
-    var self = this;
-    $.ajax({
-        url: file,
-        timeout: 3000,
-        error: function() {
-            alert('Can not load CSV file!');
-        },
-        success: function(data) {
-            Papa.parse(data, {
-                error: function(err) {
-                    alert(err);
-                },
-                complete: function(results) {
-                    self._parseData(results.data);
-                    callback(self);
-                }
-            });
-        }
-    });
-};
-
-Nanochart.prototype.addSparkline = function(query, series, charttype) {
+Nanochart.prototype.addSparkline = function(el, chartid, table, series, charttype) {
     var self = this,
-        node = $('#' + query),
         data, options, chart;
-    data = this._getData(series);
+    data = this._getData(table, series);
     if (data) {
-        node.addClass('nc-sparkline');
-        options = this._sparklineOptions(charttype);
+        options = this._sparklineOptions(table, charttype);
         if (charttype === 'bar')
-            chart = new Chartist.Bar(node[0], data, options);
+            chart = new Chartist.Bar(el, data, options);
         else if (charttype === 'line')
-            chart = new Chartist.Line(node[0], data, options);
+            chart = new Chartist.Line(el, data, options);
         chart.on('created', function(context) {
                 self._addSparklineLabel(chart, charttype);
         });
-        this.charts.push(chart);
+        chart.table = table;
+        this.charts[chartid] = chart;
     }
     return this;
 };
 
-Nanochart.prototype.addFigure = function(query, series, charttype) {
+Nanochart.prototype.addFigure = function(el, chartid, table, series, charttype) {
     var self = this,
-        node = $('#' + query),
         data, options, chart;
-    data = this._getData(series);
+    data = this._getData(table, series);
     if (data) {
-        node.addClass('nc-figure');
-        options = this._figureOptions(charttype);
+        options = this._figureOptions(table, charttype);
         if (charttype === 'bar')
-            chart = new Chartist.Bar(node[0], data, options);
+            chart = new Chartist.Bar(el, data, options);
         else if (charttype === 'line')
-            chart = new Chartist.Line(node[0], data, options);
+            chart = new Chartist.Line(el, data, options);
         chart.on('created', function(context) {
                 self._addFigureLabel(chart, charttype);
         });
-        this.charts.push(chart);
+        chart.table = table;
+        this.charts[chartid] = chart;
     }
     return this;
 };
 
-Nanochart.prototype.addLink = function(query, targets, series, filter) {
+Nanochart.prototype.addLink = function($el, targets, series, filter) {
     var self = this,
-        node = $('#' + query),
-        data = self.database.series[series];
-    if (data && node) {
-        node.addClass('nc-text');
+        table = targets[0].table;
+        data = self.database[table].series[series];
+    if ($el && data) {
         if (filter) {
             data = data.map(function(element, index, array) {
                 if (filter(element, index, array)) 
                     return element;
             });
         }
-        node.hover(function () {
+        $el.hover(function () {
             targets.forEach(function(target) {
                 self.addSeries(target, data);
             });   
@@ -88,7 +63,7 @@ Nanochart.prototype.addLink = function(query, targets, series, filter) {
                 self.removeSeries(target);
             }); 
         });
-        node.click(function() {
+        $el.click(function() {
             targets.forEach(function(target) {
                 self.replaceSeries(target, data);
             });
@@ -109,19 +84,70 @@ Nanochart.prototype.replaceSeries = function(chartName, series) {
     this._update('replace', chartName, series); 
 };
 
-Nanochart.prototype._getData = function(series) {
-    if (this.database.series 
-        && this.database.series.hasOwnProperty(series)) {
-        return {
-            labels: this.database.labels,
-            series: [this.database.series[series]]
-        };
-    } else {
-        return undefined;
+Nanochart.prototype.dataFilter = function(filter) {
+    var fn, args, token = [];
+    /* remove all white spaces */
+    filter = filter.replace(/\s+/g, "");
+    /* valid filter syntax */
+    if(/^[A-Za-z_]\w*\(\d*(,\d+)*\)/.test(filter)) {
+        token = filter.split(/\(|\)/);
+        token = token.filter(function(el) {
+            return el != "";
+        });
+        fn = token.shift();
+        if (token.length != 0) {
+            args = token[0].split(",");
+        }
+    }
+    switch(fn) {
+        case "index":
+            return function(element, index, array) {
+              return args.includes(index);
+            };
+        case "slice":
+            return function(element, index, array) {
+              return index >= args[0] && index <= args[1];
+            };
+        case "first":
+            return function(element, index, array) {
+              return index == 0;
+            };
+        default:
+            return function(element, index, array) {
+              return true;
+            };
     }
 };
 
-Nanochart.prototype._sparklineOptions = function(charttype) {
+Nanochart.prototype._update = function(action, chartName, series) {
+    $.each(this.charts, function(key, chart) {
+        if (key === chartName) {
+            var data = chart.data;
+            if (action === 'add') {
+                data.series.push(series);
+            } else if (action === 'remove' && data.series.length > 1) {
+                data.series.pop();
+            } else if (action === 'replace') {
+                data.series = [series];
+            }
+            chart.update(data);
+        }
+    });
+};
+
+Nanochart.prototype._getData = function(table, series) {
+    try {
+        return {
+            labels: this.database[table].labels,
+            series: [this.database[table].series[series]]
+        }
+    } catch (e) {
+        console.log(e);
+        return undefined;
+    }     
+};
+
+Nanochart.prototype._sparklineOptions = function(table, charttype) {
     var options = {
         axisX: {
             showLabel: false,
@@ -131,9 +157,9 @@ Nanochart.prototype._sparklineOptions = function(charttype) {
             showLabel: false,
             offset: 0
         },
-        high: this.database.max,
-        low: this.database.min,
-        width: this.database.labels.length * 6,
+        high: this.database[table].max,
+        low: this.database[table].min,
+        width: this.database[table].labels.length * 6,
         /* 1.5 * line height */
         height: '1.5em',
         seriesBarDistance: 0,
@@ -160,10 +186,10 @@ Nanochart.prototype._sparklineOptions = function(charttype) {
     return options;
 };
 
-Nanochart.prototype._figureOptions = function(charttype) {
+Nanochart.prototype._figureOptions = function(table, charttype) {
     var options = {
-        high: this.database.max,
-        low: this.database.min,
+        high: this.database[table].max,
+        low: this.database[table].min,
         axisX: { labelOffset: {
               x: 0,
               y: 5
@@ -215,7 +241,7 @@ Nanochart.prototype._addSparklineLabel = function(chart, charttype) {
             .attr('y1', 0).attr('y2', svg.attr('height')).show();
         tooltip.html(label + '<br>' + data);
     });
-}
+};
 
 Nanochart.prototype._addFigureLabel = function(chart, charttype) {
     var self    = this,
@@ -236,10 +262,11 @@ Nanochart.prototype._addFigureLabel = function(chart, charttype) {
     svg.mousemove(function(event) {
         var x = event.clientX - svg.offset().left,
             y = event.clientY - svg.offset().top,
-            cellWidth = ( right - left ) / (self.database.labels.length - 1);
+            length = chart.data.labels.length,
+            cellWidth = ( right - left ) / (length - 1);
             
         if (charttype === 'bar')
-            cellWidth = ( right - left ) / self.database.labels.length;
+            cellWidth = ( right - left ) / length;
 
         var index = Math.floor( ( x - left ) / cellWidth ),
             line  = figure.find('.ct-grids .ct-horizontal').first(),
@@ -258,61 +285,93 @@ Nanochart.prototype._addFigureLabel = function(chart, charttype) {
         
         tooltip.css('left', x - tooltip.outerWidth() / 2 + 'px');
     });
-}
+};
 
-Nanochart.prototype._update = function(action, chartName, series) {
-    this.charts.forEach(function(chart) {
-        if (chart.container.id === chartName) {
-            var data = chart.data;
-            if (action === 'add') {
-                data.series.push(series);
-            } else if (action === 'remove' && data.series.length > 1) {
-                data.series.pop();
-            } else if (action === 'replace') {
-                data.series = [series];
+(function(file) {
+    var csvParser = function(lines) {
+        var database = {},
+            table = {};
+        while(lines.length > 0) {
+            /* current line */
+            var line = lines.shift();
+            /* line contains only table name */
+            if (line.length == 1) {
+                table = {};
+                /* line contains only table name */
+                database[line.shift()] = table;
+                /* get next line */
+                if (lines.length > 0) {
+                    var nextline = lines.shift();
+                    table.unit = nextline.shift();
+                    table.labels = nextline;
+                    table.series = {};
+                }
+            } else {
+                /* add series */
+                var key = line.shift();
+                line = line.map(function(num) {
+                    return parseFloat(num);
+                });
+                table.series[key] = line;
+
+                if (table.max != undefined 
+                    && table.min != undefined) {
+                    line.push(table.max);
+                    line.push(table.min);
+                }
+                table.max = Math.max(...line);
+                table.min = Math.min(...line);
             }
-            chart.update(data);
         }
-    }); 
-};
-
-Nanochart.prototype._parseData = function(data) {
-    var database  = {}, 
-        all       = [],
-        firstLine = data.shift(),
-        unit      = firstLine.shift();
-    /* convert data format */
-    database.unit   = unit;
-    database.labels = firstLine;
-    database.series = {};
-    data.forEach(function(line) {
-        var key = line.shift();
-        var value = line.map(function(el) {
-            var v = parseFloat(el);
-            all.push(v);
-            return v;
-        });
-        database.series[key] = value;
+        return database;
+    };
+    var optionParser = function(data) {
+        var option = {},
+            re = /^([^:]+:[^;]+;)+$/;
+        data = data.charAt(data.length - 1) === ';' ? data : data + ';';
+        if (re.test(data)) {
+            var arr = data.trim().split(/\s*;\s*/);
+            arr.pop();
+            arr.forEach(function(el) {
+                var pair = el.split(/\s*:\s*/);
+                option[pair[0]] = pair[1];
+            });
+        } else {
+            console.log('invalid options!');
+        }
+        return option;
+    };
+    $.ajax({
+        url: file,
+        timeout: 3000,
+        error: function() {
+            console.log('Can not load CSV file!');
+        },
+        success: function(data) {
+            var nanochart, database;
+            var lines = data.split('\n').map(function(line) {
+                return line.trim().split(',');
+            });
+            database = csvParser(lines);
+            nanochart = new Nanochart(database);
+            $('nc-sparkline').each(function() {
+                var el = $(this)[0],
+                    option = optionParser(el.dataset.option);
+                nanochart.addSparkline(el, option.id, option.table, 
+                    option.series, option.charttype);
+            });
+            $('nc-figure').each(function() {
+                var el = $(this)[0],
+                    option = optionParser(el.dataset.option);
+                nanochart.addFigure(el, option.id, option.table, 
+                    option.series, option.charttype);
+            });
+            $('nc-link').each(function() {
+                var el = $(this)[0];
+                var option = optionParser(el.dataset.option);
+                nanochart.addLink($(this), option.chart, 
+                    option.series, Nanochart.dataFilter(option.filter));
+            });
+        }
     });
-    database.max = Math.max(...all);
-    database.min = Math.min(...all);
-    /* add to global data collections */
-    this.database = database;
-};
-
-/* new entity instance */
-var nano = new Nanochart();
-/* before adding sparkline or figure,
- * it needs to add data provider first */
-nano.addData('/csv/data.csv', function(self) {
-    /* parameters: mount node, series name, chart type */
-    self.addSparkline('papers-pro-year', 'papers pro year', 'bar')
-        .addFigure('papers', 'papers pro year', 'bar')
-        /* parameters: mount node, target sparklines or figures,
-         * series name, and user defined data filter function    */
-        .addLink('first-approaches', ['papers-pro-year', 'papers'], 
-            'papers pro year', function(element, index, array) {
-                return index < 7;
-        })
-        .addLink('technique', ['papers'], 'technique papers');
-});
+})('csv/data.csv');
