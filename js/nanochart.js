@@ -3,7 +3,16 @@ class Nanochart {
         this.database = database;
         this.charts = {};
     }
-
+    /**
+     * draw word size chart and add it to entity
+     *
+     * @param    {HTMLElement}  el         mount node
+     * @param    {string}       chartid    chart name   
+     * @param    {string}       table      table name
+     * @param    {string}       series     series name
+     * @param    {string}       charttype  bar, line or pie
+     * @returns  this
+     */
     addSparkline(el, chartid, table, series, charttype) {
         let self = this,
             data, options, chart;
@@ -14,6 +23,11 @@ class Nanochart {
                 chart = new Chartist.Bar(el, data, options);
             else if (charttype === 'line')
                 chart = new Chartist.Line(el, data, options);
+            else if (charttype === 'pie') {
+                data.series = data.series[0];
+                chart = new Chartist.Pie(el, data, options);
+            }
+            /* add tool-tip */
             chart.on('created', function(context) {
                     self._addSparklineLabel(chart, charttype);
             });
@@ -22,7 +36,16 @@ class Nanochart {
         }
         return this;
     }
-
+    /**
+     * draw normal size chart and add it to entity
+     *
+     * @param    {HTMLElement}  el         mount node
+     * @param    {string}       chartid    chart name   
+     * @param    {string}       table      table name
+     * @param    {string}       series     series name
+     * @param    {string}       charttype  bar, line or pie
+     * @returns  this
+     */
     addFigure(el, chartid, table, series, charttype) {
         let self = this,
         data, options, chart;
@@ -33,6 +56,8 @@ class Nanochart {
                 chart = new Chartist.Bar(el, data, options);
             else if (charttype === 'line')
                 chart = new Chartist.Line(el, data, options);
+            else if (charttype === 'pie')
+                chart = new Chartist.Pie(el, data, options);
             chart.on('created', function(context) {
                     self._addFigureLabel(chart, charttype);
             });
@@ -41,7 +66,15 @@ class Nanochart {
         }
         return this;
     }
-
+    /**
+     * add user interaction
+     *
+     * @param    {jQuery}   el      jQuery node
+     * @param    {string}   targets chart name
+     * @param    {string}   series  series name
+     * @param    {function} filter  filter function
+     * @returns  this
+     */
     addLink($el, targets, series, filter) {
         let self = this, table, data;
         try {
@@ -85,43 +118,6 @@ class Nanochart {
 
     replaceSeries(chartName, series) {
         this._update('replace', chartName, series); 
-    }
-
-    static dataFilter(filter) {
-        let fn, args, token = [];
-        if (filter) {
-            /* remove all white spaces */
-            filter = filter.replace(/\s+/g, "");
-            /* valid filter syntax */
-            if(/^[A-Za-z_]\w*\(\d*(,\d+)*\)/.test(filter)) {
-                token = filter.split(/\(|\)/);
-                token = token.filter(function(el) {
-                    return el != "";
-                });
-                fn = token.shift();
-                if (token.length != 0) {
-                    args = token[0].split(",");
-                }
-            }
-        }
-        switch(fn) {
-            case "index":
-                return function(element, index, array) {
-                  return args.includes(index);
-                };
-            case "slice":
-                return function(element, index, array) {
-                  return index >= args[0] && index <= args[1];
-                };
-            case "first":
-                return function(element, index, array) {
-                  return index == 0;
-                };
-            default:
-                return function(element, index, array) {
-                  return true;
-                };
-        }
     }
 
     _update(action, chartName, series) {
@@ -188,6 +184,14 @@ class Nanochart {
                 fullWidth: true
             });
         }
+        if (charttype === 'pie') {
+            options = {
+                width: '1.5em',
+                height: '1.5em',
+                showLabel: false,
+                chartPadding: 0
+            };
+        }
         return options;
     }
 
@@ -214,6 +218,10 @@ class Nanochart {
                 showArea: true
             });
         }
+
+        if (charttype === 'pie') {
+            options = {};
+        }
         return options;
     }
 
@@ -222,31 +230,47 @@ class Nanochart {
             sparkline = $(chart.container),
             tooltip   = sparkline.find('.nc-sparkline-label'),
             line      = sparkline.find('.ct-grids .ct-horizontal').first(),
-            label     = chart.data.labels[0] || 0,
-            data      = chart.data.series[0][0] || 0,
+            labels    = chart.data.labels || [],
+            data      = chart.data.series || [],
             svg       = $(chart.svg.getNode());
 
         if (tooltip.length == 0)
             tooltip = $('<span class="nc-sparkline-label"></span>');
 
-        tooltip.html(label + '<br>' + data);
-        sparkline.append(tooltip);
+        if (charttype === 'pie') {
+            tooltip.html(labels[0] + '<br>' + data[0]);
+            sparkline.append(tooltip);
 
-        svg.mousemove(function(event) {
-            let x = event.clientX - svg.offset().left,
-                length = chart.data.labels.length,
-                cellWidth = parseInt(svg.attr('width')) / length,
-                index = Math.floor( x / cellWidth ),
-                label = chart.data.labels[index] || 0,
-                data  = chart.data.series[0][index] || 0;
+            let pie = sparkline.find('.ct-series');
+            pie.each(function(index, g) {
+                $(this).mouseenter(function() {
+                    $(this).addClass('nc-pie-highlighted');
+                    tooltip.html(labels[index] + '<br>' + data[index]);
+                });
+                $(this).mouseleave(function() {
+                    $(this).removeClass('nc-pie-highlighted');
+                });
+            });
+        } else {
+            tooltip.html(labels[0] + '<br>' + data[0][0]);
+            sparkline.append(tooltip);
 
-            if (charttype === 'line')
-                cellWidth = parseInt(svg.attr('width')) / (length - 1);
+            svg.mousemove(function(event) {
+                let x         = event.clientX - svg.offset().left,
+                    length    = chart.data.labels.length,
+                    cellWidth = parseInt(svg.attr('width')) / length,
+                    index     = Math.floor( x / cellWidth ),
+                    label     = labels[index] || 0,
+                    value     = data[0][index] || 0;
 
-            line.attr('x1', x).attr('x2', x)
-                .attr('y1', 0).attr('y2', svg.attr('height')).show();
-            tooltip.html(label + '<br>' + data);
-        });
+                if (charttype === 'line')
+                    cellWidth = parseInt(svg.attr('width')) / (length - 1);
+
+                line.attr('x1', x).attr('x2', x)
+                    .attr('y1', 0).attr('y2', svg.attr('height')).show();
+                tooltip.html(label + '<br>' + value);
+            });
+        }
     };
 
     _addFigureLabel(chart, charttype) {
@@ -344,6 +368,42 @@ class Nanochart {
         }
         return option;
     };
+    let dataFilter = function(filter) {
+        let fn, args, token = [];
+        if (filter) {
+            /* remove all white spaces */
+            filter = filter.replace(/\s+/g, "");
+            /* valid filter syntax */
+            if(/^[A-Za-z_]\w*\(\d*(,\d+)*\)/.test(filter)) {
+                token = filter.split(/\(|\)/);
+                token = token.filter(function(el) {
+                    return el != "";
+                });
+                fn = token.shift();
+                if (token.length != 0) {
+                    args = token[0].split(",");
+                }
+            }
+        }
+        switch(fn) {
+            case "index":
+                return function(element, index, array) {
+                  return args.includes(index);
+                };
+            case "slice":
+                return function(element, index, array) {
+                  return index >= args[0] && index <= args[1];
+                };
+            case "first":
+                return function(element, index, array) {
+                  return index == 0;
+                };
+            default:
+                return function(element, index, array) {
+                  return true;
+                };
+        }
+    };
     $.ajax({
         url: file,
         timeout: 3000,
@@ -370,10 +430,10 @@ class Nanochart {
                     option.series, option.charttype);
             });
             $('nc-link').each(function() {
-                let el = $(this)[0];
-                let option = optionParser(el.dataset.option);
+                let el = $(this)[0]
+                    option = optionParser(el.dataset.option);
                 nanochart.addLink($(this), option.chart.replace(/\s/g, '').split(","), 
-                    option.series, Nanochart.dataFilter(option.filter));
+                    option.series, dataFilter(option.filter));
             });
         }
     });
