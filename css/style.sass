@@ -21,7 +21,6 @@ $tooltip-padding: 2px 10px;
 $tooltip-background: $green;
 /* sparkline */
 $sparkline-margin-side: 5px;
-$sparkline-right-space: 35px;
 $sparkline-bar-width: 4;
 
 html,h1, h2, h2, h3, h4, h5, h6 {
@@ -52,11 +51,12 @@ nc-link:hover:after {
 }
 /* sparkline */
 nc-sparkline {
+  top: -0.125em;
   position: relative;
 }
 nc-sparkline > svg {
   margin-left: $sparkline-margin-side;
-  margin-right: $sparkline-right-space;
+  margin-right: $sparkline-margin-side;
   background: $chart-background;
 }
 .ct-chart-pie {
@@ -66,21 +66,60 @@ nc-sparkline .ct-bar {
   stroke-width: $sparkline-bar-width;
 }
 span.nc-sparkline-label {
-  position: absolute;
-  right: $sparkline-margin-side;
-  top: 0;
+  color: white;
   font-size: $tooltip-font-size;
-  line-height: $global-line-height / 2;
+  line-height: $tooltip-font-size;
+  white-space: nowrap;
+  padding: 5px;
+  background: $chart-highlight-color;
+  position: fixed;
 }
 /* hide vertical grid line in sparkline */
 nc-sparkline .ct-vertical {
   display: none;
+}
+.nc-maxmin {
+  position: absolute;
+  line-height: 1em;
+  font-size: 0.75em;
+  top: 0;
+  left: 100%;
 }
 /* figure */
 nc-figure {
   position: relative;
   display: block;
 }
+
+ul.nc-figure-legend {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75em;
+}
+ul.nc-figure-legend li {
+  float: left;
+  text-transform: capitalize;
+  margin-right: 10px;
+}
+ul.nc-figure-legend li:before {
+  content: '';
+  display: inline-block;
+  margin-right: 0.5em;
+  width: 0.75em;
+  height: 0.75em;
+  -moz-border-radius: 0.375em;
+  -webkit-border-radius: 0.375em;
+  border-radius: 0.375em;
+}
+ul.nc-figure-legend li:first-child:before {
+  background-color: $dark-grey;
+}
+ul.nc-figure-legend li:last-child:before {
+  background-color: $chart-highlight-color;
+}
+
 .nc-tooltip {
   color: $tooltip-font-color;
   text-align: center;
@@ -128,6 +167,7 @@ line.ct-grid.ct-horizontal {
 }
 .ct-series-b .ct-bar,.ct-series-b .ct-line, .ct-series-b .ct-point {
   stroke: $chart-highlight-color;
+  stroke-opacity: 0.8;
 }
 .ct-series-b .ct-area {
   fill: $chart-highlight-color;

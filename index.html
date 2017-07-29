@@ -19,14 +19,16 @@
       <div class="uk-padding">
         <h2 class="uk-text-center">A Brief History of Dynamic Graph Visualization</h2>
         <p>
-          The visualization of dynamic graphs is a growing research area.<nc-sparkline data-option="id: test; table: test; series: first; charttype: pie"></nc-sparkline> Starting with <nc-link data-option="chart: papersProYear, papers; series: papers pro year; filter: slice(0,7)">first approaches in the 90s</nc-link>, the field has been steadily growing to around 20 new publications per year recently<nc-sparkline data-option="id: papersProYear; table: publication; series: papers pro year; charttype: bar"></nc-sparkline>. While early publications mainly introduced new visualization techniques, currently a well-balanced mix of <nc-link data-option="chart: papers; series: technique papers">technique</nc-link>, <nc-link data-option="chart: papers; series: application papers">application</nc-link>, and <nc-link data-option="chart: papers; series: evaluation papers">evaluation papers</nc-link> is published.
+          The visualization of dynamic graphs is a growing research area. Starting with <nc-link data-option="chart: papersProYear, papers; series: papers pro year; filter: slice(0,7)">first approaches in the 90s</nc-link>, the field has been steadily growing to around 20 new publications per year recently<nc-sparkline data-option="id: papersProYear; table: publication; series: papers pro year; charttype: bar"></nc-sparkline>. While early publications mainly introduced new visualization techniques, currently a well-balanced mix of <nc-link data-option="chart: papers; series: technique papers">technique</nc-link>, <nc-link data-option="chart: papers; series: application papers">application</nc-link>, and <nc-link data-option="chart: papers; series: evaluation papers">evaluation papers</nc-link> is published.
         </p>
         <nc-figure data-option="id: papers; table: publication; series: papers pro year; charttype: bar"></nc-figure>
+        <ul class="uk-list">
+          <li><a href="line.html" class="uk-link-reset">Demo Line Chart</a></li>
+          <a href="bar.html" class="uk-link-reset">Demo Bar Chart</a>
+        </ul>
       </div>
     </div>
     <script src="js/libs/jquery.min.js"></script>
-    <script src="js/libs/uikit.min.js"></script>
-    <script src="js/libs/papaparse.min.js"></script>
     <script src="js/libs/chartist.min.js"></script>
     <script src="js/nanochart.js"></script>
   </body>

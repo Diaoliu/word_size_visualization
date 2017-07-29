@@ -14,24 +14,30 @@ class Nanochart {
      * @returns  this
      */
     addSparkline(el, chartid, table, series, charttype) {
-        let self = this,
-            data, options, chart;
-        data = this._getData(table, series);
-        if (data) {
+        let data, options, chart;
+        table = this.database[table];
+        if (table) {
+            data = {
+                labels: table.labels,
+                series: [table.series[series]]
+            };
             options = this._sparklineOptions(table, charttype);
             if (charttype === 'bar')
                 chart = new Chartist.Bar(el, data, options);
             else if (charttype === 'line')
                 chart = new Chartist.Line(el, data, options);
-            else if (charttype === 'pie') {
-                data.series = data.series[0];
-                chart = new Chartist.Pie(el, data, options);
-            }
             /* add tool-tip */
-            chart.on('created', function(context) {
-                    self._addSparklineLabel(chart, charttype);
+            chart.on('created', (context) => {
+                this._animateSparkline(chart, charttype);
+                let span = $(el).find('.nc-maxmin');
+                if(span.length == 0) {
+                    span = $('<span class="nc-maxmin">' + table.max + '<br>'
+                        + table.min + '</span>');
+                    $(el).append(span).css('margin-right', span.outerWidth() + 'px');
+                }
             });
             chart.table = table;
+            chart.type = 'sparkline';
             this.charts[chartid] = chart;
         }
         return this;
@@ -47,21 +53,30 @@ class Nanochart {
      * @returns  this
      */
     addFigure(el, chartid, table, series, charttype) {
-        let self = this,
-        data, options, chart;
-        data = this._getData(table, series);
-        if (data) {
+        let data, options, chart;
+        table = this.database[table];
+        if (table) {
+            data = {
+                labels: table.labels,
+                series: [table.series[series]]
+            };
             options = this._figureOptions(table, charttype);
             if (charttype === 'bar')
                 chart = new Chartist.Bar(el, data, options);
             else if (charttype === 'line')
                 chart = new Chartist.Line(el, data, options);
-            else if (charttype === 'pie')
-                chart = new Chartist.Pie(el, data, options);
-            chart.on('created', function(context) {
-                    self._addFigureLabel(chart, charttype);
+            chart.on('created', (context) => {
+                this._animateFigure(chart, charttype);
+                let legend = $(el).find('.nc-figure-legend');
+                if(legend.length == 0) {
+                    let ul = $('<div class="nc-figure-legend"></div>');
+                    ul.append($('<span></span>').html(series))
+                        .append($('<span></span>').hide());
+                    $(el).prepend(ul);
+                }
             });
             chart.table = table;
+            chart.type = 'figure';
             this.charts[chartid] = chart;
         }
         return this;
@@ -76,76 +91,43 @@ class Nanochart {
      * @returns  this
      */
     addLink($el, targets, series, filter) {
-        let self = this, table, data;
-        try {
-            table = this.charts[targets[0]].table,
-            data = self.database[table].series[series];
-        } catch(e) {
-            console.log("Error on addLink!");
-            return this;
-        }
-        if ($el && data) {
-            if (filter) {
-                data = data.map(function(element, index, array) {
-                    if (filter(element, index, array)) 
-                        return element;
-                });
-            }
-            $el.hover(function () {
-                targets.forEach(function(target) {
-                    self.addSeries(target, data);
-                });   
-            }, function() {
-                targets.forEach(function(target) {
-                    self.removeSeries(target);
-                }); 
-            });
-            $el.click(function() {
-                targets.forEach(function(target) {
-                    self.replaceSeries(target, data);
-                });
-            });
-        }  
-    }
-
-    addSeries(chartName, series) {
-        this._update('add', chartName, series);
-    }
-
-    removeSeries(chartName) {
-        this._update('remove', chartName);
-    }
-
-    replaceSeries(chartName, series) {
-        this._update('replace', chartName, series); 
-    }
-
-    _update(action, chartName, series) {
-        $.each(this.charts, function(key, chart) {
-            if (key === chartName) {
-                let data = chart.data;
-                if (action === 'add') {
-                    data.series.push(series);
-                } else if (action === 'remove' && data.series.length > 1) {
-                    data.series.pop();
-                } else if (action === 'replace') {
-                    data.series = [series];
+        let fn = (action) => {
+            for (let target of targets) {
+                let chart = this.charts[target];
+                this._update(action, chart, series, filter);
+                if (chart.type === 'figure') {
+                    let list = $(chart.container).find('.nc-figure-legend span');
+                    list.first().html((action === 'replace')? series : undefined);
+                    list.last().html((action === 'add')? series : '');
+                    if (action === 'add') {
+                        list.last().show();
+                    } else {
+                        list.last().hide();
+                    }
                 }
-                chart.update(data);
-            }
-        });
+            } 
+        };
+        $el.hover(() => fn('add'), () => fn('remove'));
+        $el.click(() => fn('replace')); 
     }
 
-    _getData(table, series) {
-        try {
-            return {
-                labels: this.database[table].labels,
-                series: [this.database[table].series[series]]
-            }
-        } catch (e) {
-            console.log("Error on _getData");
-            return undefined;
-        }     
+    _update(action, chart, series, filter) {
+        let data = chart.data;
+        series = chart.table.series[series];
+        if (filter) {
+            series = series.map((element, index, array) => {
+                if (filter(element, index, array)) 
+                    return element;
+            });
+        }
+        if (action === 'add') {
+            data.series.push(series);
+        } else if (action === 'remove' && data.series.length > 1) {
+            data.series.pop();
+        } else if (action === 'replace') {
+            data.series = [series];
+        }
+        chart.update(data);
     }
 
     _sparklineOptions(table, charttype) {
@@ -158,9 +140,9 @@ class Nanochart {
                 showLabel: false,
                 offset: 0
             },
-            high: this.database[table].max,
-            low: this.database[table].min,
-            width: this.database[table].labels.length * 6,
+            high: table.max,
+            low: table.min,
+            width: table.labels.length * 6,
             /* 1.5 * line height */
             height: '1.5em',
             seriesBarDistance: 0,
@@ -184,21 +166,13 @@ class Nanochart {
                 fullWidth: true
             });
         }
-        if (charttype === 'pie') {
-            options = {
-                width: '1.5em',
-                height: '1.5em',
-                showLabel: false,
-                chartPadding: 0
-            };
-        }
         return options;
     }
 
     _figureOptions(table, charttype) {
         let options = {
-            high: this.database[table].max,
-            low: this.database[table].min,
+            high: table.max,
+            low: table.min,
             axisX: { labelOffset: {
                   x: 0,
                   y: 5
@@ -218,14 +192,10 @@ class Nanochart {
                 showArea: true
             });
         }
-
-        if (charttype === 'pie') {
-            options = {};
-        }
         return options;
     }
 
-    _addSparklineLabel(chart, charttype) {
+    _animateSparkline(chart, charttype) {
         let self      = this,
             sparkline = $(chart.container),
             tooltip   = sparkline.find('.nc-sparkline-label'),
@@ -235,59 +205,49 @@ class Nanochart {
             svg       = $(chart.svg.getNode());
 
         if (tooltip.length == 0)
-            tooltip = $('<span class="nc-sparkline-label"></span>');
+            tooltip = $('<span class="nc-sparkline-label"></span>').hide();
+        sparkline.append(tooltip);
 
-        if (charttype === 'pie') {
-            tooltip.html(labels[0] + '<br>' + data[0]);
-            sparkline.append(tooltip);
+        svg.mousemove(function(event) {
+            let x         = event.clientX - svg.offset().left,
+                length    = chart.data.labels.length,
+                cellWidth = parseInt(svg.attr('width')) / length,
+                index     = Math.floor( x / cellWidth ),
+                label     = labels[index] || 0,
+                value     = data[0][index] || 0;
 
-            let pie = sparkline.find('.ct-series');
-            pie.each(function(index, g) {
-                $(this).mouseenter(function() {
-                    $(this).addClass('nc-pie-highlighted');
-                    tooltip.html(labels[index] + '<br>' + data[index]);
-                });
-                $(this).mouseleave(function() {
-                    $(this).removeClass('nc-pie-highlighted');
-                });
+            if (charttype === 'line')
+                cellWidth = parseInt(svg.attr('width')) / (length - 1);
+
+            line.attr('x1', x).attr('x2', x)
+                .attr('y1', 0).attr('y2', svg.attr('height')).show();
+            tooltip.css({
+                "left": event.clientX - tooltip.outerWidth() / 2 + "px",
+                "top": svg.offset().top - tooltip.outerHeight() + "px"
             });
-        } else {
-            tooltip.html(labels[0] + '<br>' + data[0][0]);
-            sparkline.append(tooltip);
+            tooltip.html(label + ': ' + value + ' ' + chart.table.unit).show();
+        });
 
-            svg.mousemove(function(event) {
-                let x         = event.clientX - svg.offset().left,
-                    length    = chart.data.labels.length,
-                    cellWidth = parseInt(svg.attr('width')) / length,
-                    index     = Math.floor( x / cellWidth ),
-                    label     = labels[index] || 0,
-                    value     = data[0][index] || 0;
-
-                if (charttype === 'line')
-                    cellWidth = parseInt(svg.attr('width')) / (length - 1);
-
-                line.attr('x1', x).attr('x2', x)
-                    .attr('y1', 0).attr('y2', svg.attr('height')).show();
-                tooltip.html(label + '<br>' + value);
-            });
-        }
+        svg.mouseleave(function() {
+            tooltip.hide();
+        });
     };
 
-    _addFigureLabel(chart, charttype) {
+    _animateFigure(chart, charttype) {
         let self    = this,
             figure  = $(chart.container),
-            tooltip = figure.find('.nc-tooltip'),
-            grid    = figure.find('.ct-grid-background'),
-            left    = parseInt(grid.attr('x')),
-            top     = parseInt(grid.attr('y')),
-            right   = parseInt(grid.attr('width')) + left,
-            bottom  = parseInt(grid.attr('height')) + top,
-            svg     = $(chart.svg.getNode());
-
+            tooltip = figure.find('.nc-tooltip');
+            
         if (tooltip.length == 0)
             tooltip = $('<div class="nc-tooltip"></div>').hide();
-
         figure.append(tooltip);
+
+        let grid   = figure.find('.ct-grid-background'),
+            left   = parseInt(grid.attr('x')),
+            top    = parseInt(grid.attr('y')),
+            right  = parseInt(grid.attr('width')) + left,
+            bottom = parseInt(grid.attr('height')) + top,
+            svg    = $(chart.svg.getNode());
 
         svg.mousemove(function(event) {
             let x = event.clientX - svg.offset().left,
@@ -305,7 +265,7 @@ class Nanochart {
 
             if (x >= left && x <= right
                 && y > top && y < bottom) {
-                tooltip.html(label + ': ' + data + ' ' + self.database[chart.table].unit);
+                tooltip.html(label + ': ' + data + ' ' + chart.table.unit);
                 tooltip.show();
                 line.attr('x1', x).attr('x2', x).attr('y1', top).show();
             } else {
@@ -314,6 +274,22 @@ class Nanochart {
             }
             
             tooltip.css('left', x - tooltip.outerWidth() / 2 + 'px');
+        });
+    }
+
+    _animatePieChart(container, tooltip, labels, data) {
+        tooltip.html(labels[0] + '<br>' + data[0]);
+        container.append(tooltip);
+
+        let pie = container.find('.ct-series');
+        pie.each(function(index, g) {
+            $(this).mouseenter(function() {
+                $(this).addClass('nc-pie-highlighted');
+                tooltip.html(labels[index] + '<br>' + data[index]);
+            });
+            $(this).mouseleave(function() {
+                $(this).removeClass('nc-pie-highlighted');
+            });
         });
     }
 }
@@ -340,7 +316,7 @@ class Nanochart {
             } else {
                 /* add series */
                 let key = line.shift();
-                line = line.map(function(num) {
+                line = line.map((num) => {
                     return parseFloat(num);
                 });
                 table.series[key] = line;
@@ -357,12 +333,13 @@ class Nanochart {
             re = /^([^:]+:[^;]+;)+$/;
         data = data.charAt(data.length - 1) === ';' ? data : data + ';';
         if (re.test(data)) {
-            let arr = data.trim().split(/\s*;\s*/);
-            arr.pop();
-            arr.forEach(function(el) {
+            let token = data.trim().split(/\s*;\s*/);
+            /* last element is empty */
+            token.pop();
+            for (let el of token) {
                 let pair = el.split(/\s*:\s*/);
                 option[pair[0]] = pair[1];
-            });
+            }
         } else {
             console.log('invalid options!');
         }
@@ -387,19 +364,23 @@ class Nanochart {
         }
         switch(fn) {
             case "index":
-                return function(element, index, array) {
+                return (element, index, array) => {
                   return args.includes(index);
                 };
             case "slice":
-                return function(element, index, array) {
+                return (element, index, array) => {
                   return index >= args[0] && index <= args[1];
                 };
             case "first":
-                return function(element, index, array) {
+                return (element, index, array) => {
                   return index == 0;
                 };
+            case "last":
+                return (element, index, array) => {
+                  return index == array.length - 1;
+                };
             default:
-                return function(element, index, array) {
+                return (element, index, array) => {
                   return true;
                 };
         }
@@ -410,30 +391,34 @@ class Nanochart {
         error: function() {
             console.log('Can not load CSV file!');
         },
-        success: function(data) {
+        success: (data) => {
             let nanochart, database;
-            let lines = data.split('\n').map(function(line) {
+            let lines = data.split('\n').map((line) => {
                 return line.trim().split(',');
             });
             database = csvParser(lines);
             nanochart = new Nanochart(database);
             $('nc-sparkline').each(function() {
-                let el = $(this)[0],
-                    option = optionParser(el.dataset.option);
+                let el = $(this)[0];
+                let option = optionParser(el.dataset.option);
                 nanochart.addSparkline(el, option.id, option.table, 
                     option.series, option.charttype);
             });
             $('nc-figure').each(function() {
-                let el = $(this)[0],
-                    option = optionParser(el.dataset.option);
+                let el = $(this)[0];
+                let option = optionParser(el.dataset.option);
                 nanochart.addFigure(el, option.id, option.table, 
                     option.series, option.charttype);
             });
             $('nc-link').each(function() {
-                let el = $(this)[0]
-                    option = optionParser(el.dataset.option);
-                nanochart.addLink($(this), option.chart.replace(/\s/g, '').split(","), 
-                    option.series, dataFilter(option.filter));
+                let el = $(this)[0];
+                let option = optionParser(el.dataset.option);
+                let charts = option.chart.split(",")
+                    .map((chart) => {
+                        return chart.trim()
+                    });
+                nanochart.addLink($(this), charts, option.series, 
+                    dataFilter(option.filter));
             });
         }
     });
