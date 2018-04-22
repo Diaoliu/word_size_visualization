@@ -94,11 +94,12 @@ class Nanochart {
         let fn = (action) => {
             for (let target of targets) {
                 let chart = this.charts[target];
-                this._update(action, chart, series, filter);
+                this.update(action, chart, series, filter);
                 if (chart.type === 'figure') {
                     let list = $(chart.container).find('.nc-figure-legend span');
-                    list.first().html((action === 'replace')? series : undefined);
-                    list.last().html((action === 'add')? series : '');
+                    let legend = series + ' - ' + $el.html();
+                    list.first().html((action === 'replace')? legend : undefined);
+                    list.last().html((action === 'add')? legend : '');
                     if (action === 'add') {
                         list.last().show();
                     } else {
@@ -111,7 +112,7 @@ class Nanochart {
         $el.click(() => fn('replace')); 
     }
 
-    _update(action, chart, series, filter) {
+    update(action, chart, series, filter) {
         let data = chart.data;
         series = chart.table.series[series];
         if (filter) {
@@ -196,8 +197,7 @@ class Nanochart {
     }
 
     _animateSparkline(chart, charttype) {
-        let self      = this,
-            sparkline = $(chart.container),
+        let sparkline = $(chart.container),
             tooltip   = sparkline.find('.nc-sparkline-label'),
             line      = sparkline.find('.ct-grids .ct-horizontal').first(),
             labels    = chart.data.labels || [],
@@ -209,21 +209,22 @@ class Nanochart {
         sparkline.append(tooltip);
 
         svg.mousemove(function(event) {
-            let x         = event.clientX - svg.offset().left,
+            let x         = event.pageX - svg.offset().left,
                 length    = chart.data.labels.length,
-                cellWidth = parseInt(svg.attr('width')) / length,
-                index     = Math.floor( x / cellWidth ),
-                label     = labels[index] || 0,
-                value     = data[0][index] || 0;
+                cellWidth = parseInt(svg.attr('width')) / length;
 
             if (charttype === 'line')
                 cellWidth = parseInt(svg.attr('width')) / (length - 1);
+
+            let index     = Math.floor( x / cellWidth ),
+                label     = labels[index] || 0,
+                value     = data[0][index] || 0;
 
             line.attr('x1', x).attr('x2', x)
                 .attr('y1', 0).attr('y2', svg.attr('height')).show();
             tooltip.css({
                 "left": event.clientX - tooltip.outerWidth() / 2 + "px",
-                "top": svg.offset().top - tooltip.outerHeight() + "px"
+                "top": svg.offset().top - window.pageYOffset - tooltip.outerHeight() + "px"
             });
             tooltip.html(label + ': ' + value + ' ' + chart.table.unit).show();
         });
@@ -234,8 +235,7 @@ class Nanochart {
     };
 
     _animateFigure(chart, charttype) {
-        let self    = this,
-            figure  = $(chart.container),
+        let figure  = $(chart.container),
             tooltip = figure.find('.nc-tooltip');
             
         if (tooltip.length == 0)
@@ -250,11 +250,10 @@ class Nanochart {
             svg    = $(chart.svg.getNode());
 
         svg.mousemove(function(event) {
-            let x = event.clientX - svg.offset().left,
-                y = event.clientY - svg.offset().top,
+            let x = event.pageX - svg.offset().left,
+                y = event.pageY - svg.offset().top,
                 length = chart.data.labels.length,
                 cellWidth = ( right - left ) / (length - 1);
-                
             if (charttype === 'bar')
                 cellWidth = ( right - left ) / length;
 
@@ -358,8 +357,10 @@ class Nanochart {
                 });
                 fn = token.shift();
                 if (token.length != 0) {
-                    args = token[0].split(",");
+                    args = token[0].split(",").map((str) => { return parseInt(str); });
                 }
+            } else {
+                fn = filter.trim();
             }
         }
         switch(fn) {
@@ -378,6 +379,14 @@ class Nanochart {
             case "last":
                 return (element, index, array) => {
                   return index == array.length - 1;
+                };
+            case "max":
+                return (element, index, array) => {
+                  return index == Math.max(...array);
+                };
+            case "min":
+                return (element, index, array) => {
+                  return index == Math.min(...array);
                 };
             default:
                 return (element, index, array) => {
@@ -420,6 +429,7 @@ class Nanochart {
                 nanochart.addLink($(this), charts, option.series, 
                     dataFilter(option.filter));
             });
+            console.log(nanochart);
         }
     });
 })('csv/data.csv');
